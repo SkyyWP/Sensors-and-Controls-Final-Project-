@@ -1,247 +1,120 @@
 import numpy as np
+import mujoco
+from mujoco import Renderer
+
+from config import (
+    CAMERA_NAME, IMAGE_WIDTH, IMAGE_HEIGHT,
+    MIN_RED_PIXELS, RED_THRESHOLD, RED_RATIO,
+    SURFACE_TO_CENTRE
+)
 
 
-# ---------------------------------------------------------
-# CAMERA INTRINSICS
-# ---------------------------------------------------------
+class RGBDPerception:
+    """Live wrist-camera RGB-D capture and 3D target localisation."""
 
-def calculate_intrinsics(width, height, vertical_fov_deg):
-    """
-    Calculate pinhole camera intrinsics from image dimensions
-    and vertical field of view.
-
-    Returns:
-        Dictionary containing fx, fy, cx, cy.
-    """
-
-    fovy = np.deg2rad(vertical_fov_deg)
-
-    fy = height / (2.0 * np.tan(fovy / 2.0))
-    fx = fy
-
-    cx = (width - 1) / 2.0
-    cy = (height - 1) / 2.0
-
-    return {
-        "fx": float(fx),
-        "fy": float(fy),
-        "cx": float(cx),
-        "cy": float(cy),
-        "width": int(width),
-        "height": int(height)
-    }
-
-
-# ---------------------------------------------------------
-# TARGET DETECTION
-# ---------------------------------------------------------
-
-def detect_red_target(rgb, min_pixels=20):
-    """
-    Detect a red target in an RGB image.
-
-    Args:
-        rgb:
-            RGB image with shape (height, width, 3).
-
-        min_pixels:
-            Minimum number of red pixels required.
-
-    Returns:
-        Dictionary containing:
-            u              Median horizontal pixel coordinate
-            v              Median vertical pixel coordinate
-            pixel_count    Number of detected red pixels
-            mask           Binary detection mask
-
-        Returns None if no valid target is detected.
-    """
-
-    rgb = np.asarray(rgb)
-
-    if rgb.ndim != 3 or rgb.shape[2] < 3:
-        raise ValueError("RGB image must have shape (height, width, 3).")
-
-    red = (
-        (rgb[:, :, 0] > 120)
-        & (rgb[:, :, 0] > 1.8 * rgb[:, :, 1])
-        & (rgb[:, :, 0] > 1.8 * rgb[:, :, 2])
-    )
-
-    ys, xs = np.where(red)
-
-    if len(xs) < min_pixels:
-        return None
-
-    return {
-        "u": float(np.median(xs)),
-        "v": float(np.median(ys)),
-        "pixel_count": int(len(xs)),
-        "mask": red
-    }
-
-
-# ---------------------------------------------------------
-# DEPTH LOCALISATION
-# ---------------------------------------------------------
-
-def estimate_target_position(
-    rgb,
-    depth,
-    camera_to_world,
-    intrinsics,
-    depth_scale=1.0,
-    min_pixels=20,
-    min_depth=0.02,
-    max_depth=2.0
-):
-    """
-    Detect a red target and estimate its 3D world position.
-
-    Args:
-        rgb:
-            RGB image (height, width, 3).
-
-        depth:
-            Depth image (height, width).
-
-        camera_to_world:
-            4x4 transformation matrix describing the camera
-            optical frame relative to the world frame.
-
-            An SE3 object is also accepted.
-
-        intrinsics:
-            Dictionary containing fx, fy, cx and cy.
-
-        depth_scale:
-            Multiplier converting raw depth values into metres.
-
-            Examples:
-                Depth already in metres: 1.0
-                Depth in millimetres:    0.001
-                RealSense raw Z16:       usually 0.001,
-                                        subject to device settings.
-
-        Returns:
-            Dictionary containing:
-                target_world
-                target_camera
-                pixel
-                depth_m
-                pixel_count
-                confidence
-
-            Returns None if detection or depth estimation fails.
-    """
-
-    rgb = np.asarray(rgb)
-    depth = np.asarray(depth)
-
-    # Validate image dimensions.
-    if rgb.shape[:2] != depth.shape[:2]:
-        raise ValueError(
-            "RGB and depth images must have matching dimensions."
+    def __init__(self, model):
+        self.model = model
+        self.camera_id = mujoco.mj_name2id(
+            model, mujoco.mjtObj.mjOBJ_CAMERA, CAMERA_NAME
         )
 
-    if depth.ndim != 2:
-        raise ValueError("Depth image must be a 2D array.")
+        if self.camera_id < 0:
+            raise RuntimeError(f"Camera '{CAMERA_NAME}' not found.")
 
-    # Check camera intrinsics.
-    required = ("fx", "fy", "cx", "cy")
-
-    if not all(key in intrinsics for key in required):
-        raise ValueError(
-            "Intrinsics must contain fx, fy, cx and cy."
+        self.renderer = Renderer(
+            model, height=IMAGE_HEIGHT, width=IMAGE_WIDTH
         )
 
-    fx = float(intrinsics["fx"])
-    fy = float(intrinsics["fy"])
-    cx = float(intrinsics["cx"])
-    cy = float(intrinsics["cy"])
+        fovy = np.deg2rad(float(model.cam_fovy[self.camera_id]))
+        self.fy = IMAGE_HEIGHT / (2 * np.tan(fovy / 2))
+        self.fx = self.fy
+        self.cx = (IMAGE_WIDTH - 1) / 2
+        self.cy = (IMAGE_HEIGHT - 1) / 2
 
-    if fx <= 0 or fy <= 0:
-        raise ValueError("Camera focal lengths must be positive.")
+    def close(self):
+        self.renderer.close()
 
-    # Detect the target in the RGB image.
-    detection = detect_red_target(rgb, min_pixels)
+    def capture(self, data):
+        """Return RGB, depth, and estimated target world position."""
 
-    if detection is None:
-        return None
+        self.renderer.update_scene(data, camera=CAMERA_NAME)
+        rgb = self.renderer.render().copy()
 
-    mask = detection["mask"]
+        self.renderer.enable_depth_rendering()
+        self.renderer.update_scene(data, camera=CAMERA_NAME)
+        depth = self.renderer.render().copy()
+        self.renderer.disable_depth_rendering()
 
-    # Extract depth values at detected red pixels.
-    valid_depth = (
-        np.isfinite(depth)
-        & (depth > 0)
-    )
+        r = rgb[:, :, 0].astype(float)
+        g = rgb[:, :, 1].astype(float)
+        b = rgb[:, :, 2].astype(float)
 
-    valid_mask = mask & valid_depth
+        mask = (
+            (r > RED_THRESHOLD)
+            & (r > RED_RATIO * g)
+            & (r > RED_RATIO * b)
+        )
 
-    ys, xs = np.where(valid_mask)
+        rows, cols = np.where(mask)
 
-    if len(xs) < min_pixels:
-        return None
+        if len(cols) < MIN_RED_PIXELS:
+            return {
+                "detected": False,
+                "rgb": rgb,
+                "depth": depth,
+                "pixel": None,
+                "world": None,
+                "count": len(cols),
+            }
 
-    # Convert depth into metres.
-    depth_values = depth[ys, xs].astype(float) * depth_scale
+        # Use the median pixel and median depth of the red region.
+        u = float(np.median(cols))
+        v = float(np.median(rows))
 
-    # Reject invalid or out-of-range depth measurements.
-    good = (
-        np.isfinite(depth_values)
-        & (depth_values > min_depth)
-        & (depth_values < max_depth)
-    )
+        red_depth = depth[mask]
+        valid = np.isfinite(red_depth) & (red_depth > 0.05) & (red_depth < 2.0)
 
-    if np.count_nonzero(good) < min_pixels:
-        return None
+        if np.count_nonzero(valid) < MIN_RED_PIXELS:
+            return {
+                "detected": False,
+                "rgb": rgb,
+                "depth": depth,
+                "pixel": (u, v),
+                "world": None,
+                "count": len(cols),
+            }
 
-    xs = xs[good]
-    ys = ys[good]
-    depth_values = depth_values[good]
+        d = float(np.median(red_depth[valid]))
 
-    # Median pixel and median depth.
-    u = float(np.median(xs))
-    v = float(np.median(ys))
-    depth_m = float(np.median(depth_values))
+        # MuJoCo camera frame: +X right, +Y up, -Z forward.
+        point_camera = np.array([
+            (u - self.cx) * d / self.fx,
+            -(v - self.cy) * d / self.fy,
+            -d,
+        ])
 
-    # -----------------------------------------------------
-    # PIXEL TO CAMERA COORDINATES
-    # -----------------------------------------------------
+        camera_position = data.cam_xpos[self.camera_id].copy()
+        camera_rotation = data.cam_xmat[self.camera_id].reshape(3, 3).copy()
 
-    # Optical camera frame:
-    # X = right, Y = down, Z = forward.
+        point_surface_world = (
+            camera_position + camera_rotation @ point_camera
+        )
 
-    target_camera = np.array([
-        (u - cx) * depth_m / fx,
-        (v - cy) * depth_m / fy,
-        depth_m
-    ])
+        camera_forward = -camera_rotation[:, 2]
+        camera_forward /= np.linalg.norm(camera_forward)
 
-    # -----------------------------------------------------
-    # CAMERA TO WORLD COORDINATES
-    # -----------------------------------------------------
+        # Approximate the cube centre from its visible surface.
+        point_world = (
+            point_surface_world
+            + SURFACE_TO_CENTRE * camera_forward
+        )
 
-    # Accept either a NumPy 4x4 matrix or a Spatialmath SE3.
-    if hasattr(camera_to_world, "A"):
-        T_world_camera = np.asarray(camera_to_world.A, dtype=float)
-    else:
-        T_world_camera = np.asarray(camera_to_world, dtype=float)
-
-    if T_world_camera.shape != (4, 4):
-        raise ValueError("camera_to_world must be a 4x4 matrix.")
-
-    target_camera_h = np.append(target_camera, 1.0)
-
-    target_world_h = T_world_camera @ target_camera_h
-    target_world = target_world_h[:3]
-
-    return {
-        "target_world": target_world,
-        "target_camera": target_camera,
-        "pixel": (u, v),
-        "depth_m": depth_m,
-        "pixel_count": int(len(xs)),
-        "confidence": float(len(xs) / max(detection["pixel_count"], 1))
-    }
+        return {
+            "detected": True,
+            "rgb": rgb,
+            "depth": depth,
+            "pixel": (u, v),
+            "depth_m": d,
+            "world": point_world,
+            "count": len(cols),
+        }
