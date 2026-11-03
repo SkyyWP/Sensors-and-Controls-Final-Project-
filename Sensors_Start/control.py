@@ -36,12 +36,17 @@ class JointLQRController:
         qdd_ref = np.zeros(6) if qdd_ref is None else qdd_ref
         dt = self.dt
        
+        if not hasattr(self, "q_cmd"): #you can't reset the values back to the estimate others gravity takes over
+           self.q_cmd = np.array(q_est, dtype=float)
+           self.qd_cmd = np.zeros(6)
         error_position = q_est - q_goal #gets distance from the target from each joint
         error_velocity = qd_est - qd_ref # gets current speed
         u = -(self.K[0, 0] * error_position + self.K[0, 1] * error_velocity) + qdd_ref
         
         #returns q next which is = estimated q + q*dt + 1/2 * u * dt^2
-        return q_est + qd_est * dt + 0.5 * u * dt**2
+        self.q_cmd = self.q_cmd + self.qd_cmd * dt + 0.5 * u * dt**2 #saves position
+        self.qd_cmd = self.qd_cmd + u * dt #saves speed 
+        return self.q_cmd
 
 
 def solve_position_ik(model, data, site_id, target_position):

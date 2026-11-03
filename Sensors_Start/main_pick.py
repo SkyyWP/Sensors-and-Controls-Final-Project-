@@ -207,7 +207,7 @@ def main():
 
                     last_capture_time = data.time
 
-                    if data.time - last_seen > 3.0:
+                    if phase == "approach" and data.time - last_seen > 3.0:
                         print("Target lost for 3 seconds. Stopping safely.")
                         return
 
