@@ -61,7 +61,7 @@ def main():
     if model.nkey:
         mujoco.mj_resetDataKeyframe(model, data, 0)
     else:
-        mujoco.mj_resetData(model)
+        mujoco.mj_resetData(model, data)
 
     mujoco.mj_forward(model, data)
 
@@ -104,7 +104,7 @@ def main():
         TARGET_PROCESS_NOISE, TARGET_MEASUREMENT_NOISE
     )
     observer = JointStateObserver()
-    controller = JointLQRController()
+    controller = JointLQRController(dt=model.opt.timestep)
 
     grasp = KinematicGrasp(
         model, data, target_joint_id, site_id
@@ -226,7 +226,7 @@ def main():
 
                 q_actual = read_arm_positions(model, data)
                 q_est, qd_est = observer.update(
-                    q_actual, model.opt.timestep * CAPTURE_INTERVAL
+                    q_actual, model.opt.timestep 
                 )
 
                 q_command = controller.command(
@@ -258,7 +258,7 @@ def main():
                 if phase == "approach" and cartesian_error < 0.025:
                     print("\n[3/6] Approach pose reached.")
                     phase = "descend"
-                    q_goal = None
+                    #q_goal = None
 
                 elif phase == "descend" and cartesian_error < 0.018:
                     print("\n[4/6] Grasp position reached.")
