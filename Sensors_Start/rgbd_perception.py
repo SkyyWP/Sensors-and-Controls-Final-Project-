@@ -3,7 +3,7 @@ import mujoco
 from mujoco import Renderer
 
 from config import (
-    CAMERA_NAME, IMAGE_WIDTH, IMAGE_HEIGHT,
+    ROOT, CAMERA_NAME, IMAGE_WIDTH, IMAGE_HEIGHT,
     MIN_RED_PIXELS, RED_THRESHOLD, RED_RATIO,
     SURFACE_TO_CENTRE
 )
@@ -25,11 +25,24 @@ class RGBDPerception:
             model, height=IMAGE_HEIGHT, width=IMAGE_WIDTH
         )
 
-        fovy = np.deg2rad(float(model.cam_fovy[self.camera_id]))
-        self.fy = IMAGE_HEIGHT / (2 * np.tan(fovy / 2))
-        self.fx = self.fy
-        self.cx = (IMAGE_WIDTH - 1) / 2
-        self.cy = (IMAGE_HEIGHT - 1) / 2
+        calibration = ROOT / "calibration.npz" #Grabs K from camera_callibration
+        if calibration.exists():
+            K = np.load(calibration)["K"]
+            self.fy = float(K[1, 1])
+            self.fx = float(K[0, 0])
+            self.cx = float(K[0, 2])
+            self.cy = float(K[1, 2])
+            
+            print("Camera_Callibration worked")
+
+        else: #back up incase the 
+            fovy = np.deg2rad(float(model.cam_fovy[self.camera_id]))
+            self.fy = IMAGE_HEIGHT / (2 * np.tan(fovy / 2))
+            self.fx = self.fy
+            self.cx = (IMAGE_WIDTH - 1) / 2
+            self.cy = (IMAGE_HEIGHT - 1) / 2
+        
+        
 
     def close(self):
         self.renderer.close()

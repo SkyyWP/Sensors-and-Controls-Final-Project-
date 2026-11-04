@@ -25,8 +25,13 @@ mujoco.mj_forward(model, data)
 camera = RGBDPerception(model)
 q_home = data.qpos[:6].copy()
 
-
-while len(objpoints) < 15: #checks 15 photos from the wrist camera 
+#to randomly wiggle the arms 
+rng = np.random.default_rng(0)
+randomPose = 0 
+while len(objpoints) < 15 and randomPose < 300: #checks 15 photos from the wrist camera 
+    randomPose += 1
+    data.qpos[:6] = q_home + rng.uniform(-0.3, 0.3, 6) #adds and moves the arm to a random pose from the starting pose
+    mujoco.mj_forward(model, data) #updates scene
     img = cv.cvtColor(camera.capture(data)["rgb"], cv.COLOR_RGB2BGR)
     gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     # Find the chess board corners
@@ -43,9 +48,14 @@ while len(objpoints) < 15: #checks 15 photos from the wrist camera
 cv.destroyAllWindows()
 camera.close()
 
+
 flags = cv.CALIB_ZERO_TANGENT_DIST | cv.CALIB_FIX_K1 | cv.CALIB_FIX_K2 | cv.CALIB_FIX_K3
 ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None, flags=flags)
 
+#Print results 
+print("Photos used:", len(objpoints))
+print("RMS error:", ret)
+print("K =\n", mtx)
 
 mean_error = 0
 for i in range(len(objpoints)):
