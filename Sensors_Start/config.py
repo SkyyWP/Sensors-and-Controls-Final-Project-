@@ -20,8 +20,7 @@ SURFACE_TO_CENTRE = 0.030
 # Target estimator
 TARGET_PROCESS_NOISE = 1e-3 #0.01 
 TARGET_MEASUREMENT_NOISE = 0.01  # 9e-6
-# Camera noise (camera_noise.py), False for no noise
-CAMERA_NOISE = True
+CAMERA_NOISE = True # Camera noise (camera_noise.py), False for no noise
 
 # Control
 IK_DAMPING = 0.04
