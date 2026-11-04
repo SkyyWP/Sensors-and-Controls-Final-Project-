@@ -14,12 +14,14 @@ IMAGE_HEIGHT = 480
 # Camera / perception
 MIN_RED_PIXELS = 25
 RED_THRESHOLD = 120
-RED_RATIO = 2.5
+RED_RATIO = 1.8
 SURFACE_TO_CENTRE = 0.030
 
 # Target estimator
-TARGET_PROCESS_NOISE = 1e-4 #0.01 
+TARGET_PROCESS_NOISE = 1e-3 #0.01 
 TARGET_MEASUREMENT_NOISE = 0.01  # 9e-6
+# Camera noise (camera_noise.py), False for no noise
+CAMERA_NOISE = True
 
 # Control
 IK_DAMPING = 0.04
