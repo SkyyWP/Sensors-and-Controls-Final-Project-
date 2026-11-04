@@ -61,7 +61,7 @@ class RGBDPerception:
             return {
                 "detected": False,
                 "rgb": rgb,
-                "depth": depth,
+                "depth_image": depth,
                 "pixel": None,
                 "world": None,
                 "count": len(cols),
@@ -78,7 +78,7 @@ class RGBDPerception:
             return {
                 "detected": False,
                 "rgb": rgb,
-                "depth": depth,
+                "depth_image": depth,
                 "pixel": (u, v),
                 "world": None,
                 "count": len(cols),
@@ -112,9 +112,13 @@ class RGBDPerception:
         return {
             "detected": True,
             "rgb": rgb,
-            "depth": depth,
+            "depth_image": depth,
             "pixel": (u, v),
             "depth_m": d,
             "world": point_world,
             "count": len(cols),
+
+            # Kalman Filter measurement information:
+            "fx": float(self.fx),
+            "cam_rot": camera_rotation,
         }
