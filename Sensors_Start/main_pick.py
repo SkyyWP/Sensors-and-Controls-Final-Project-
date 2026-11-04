@@ -183,7 +183,7 @@ def main():
 
     observer = JointStateObserver()
 
-    controller = JointLQRController()
+    controller = JointLQRController(model.opt.timestep)
 
     grasp = KinematicGrasp(
         model, data, target_joint_id, site_id
@@ -335,7 +335,7 @@ def main():
                     last_capture_time = data.time
 
                     # Stop if the target has been lost for too long.
-                    if data.time - last_seen > 3.0:
+                    if data.time - last_seen > 3.0 and phase == "approach":
                         print(
                             "Target lost for 3 seconds. "
                             "Stopping safely."
