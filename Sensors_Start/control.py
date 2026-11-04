@@ -73,17 +73,24 @@ def solve_position_ik(model, data, site_id, target_position):
         current = data.site_xpos[site_id].copy()
         error = target - current
 
-        if np.linalg.norm(error) < 0.003:
+        endEffectorPosition = data.site_xmat[site_id].reshape(3, 3)[:, 2]
+        errorRotation = np.cross(endEffectorPosition, np.array([0, 0, -1]))
+        if np.linalg.norm(error) < 0.003 and np.linalg.norm(errorRotation):
             break
 
         jacp = np.zeros((3, model.nv))
         jacr = np.zeros((3, model.nv))
         mujoco.mj_jacSite(model, data, jacp, jacr, site_id)
 
-        J = jacp[:, dof_addresses]
+        #Weight is 0.3 this can be changed 
+        #smaller weight --> provides more tilt 
+        #bigger weight keeps its more vertical 
+        #here because 
+        J = np.vstack([jacp[:, dof_addresses], 0.3 * jacr[:, dof_addresses]])
+        e = np.concatenate([error, 0.3 * errorRotation])
         delta = J.T @ np.linalg.solve(
-            J @ J.T + (IK_DAMPING ** 2) * np.eye(3),
-            error
+            J @ J.T + (IK_DAMPING ** 2) * np.eye(6),
+            e
         )
 
         delta = np.clip(delta, -IK_STEP_LIMIT, IK_STEP_LIMIT)

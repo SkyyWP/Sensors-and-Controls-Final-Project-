@@ -30,13 +30,13 @@ class KinematicGrasp:
         target_pos = self.data.qpos[self.qadr:self.qadr + 3].copy()
         target_quat = self.data.qpos[self.qadr + 3:self.qadr + 7].copy()
 
-        self.relative_position = site_mat.T @ (target_pos - site_pos)
+        self.relative_position = np.array([0, 0, 0.03]) # makes the cube 3cm below the EF
 
         site_quat = np.zeros(4)
-        mujoco.mju_mat2Quat(site_quat, site_mat.flatten())
+        mujoco.mju_mat2Quat(site_quat, site_mat.flatten()) #mat2 converts 3x3 rotation matrix into a quaternion
 
-        inverse_site_quat = site_quat.copy()
-        inverse_site_quat[1:] *= -1
+        inverse_site_quat = np.zeros(4)
+        mujoco.mju_negQuat(inverse_site_quat, site_quat)
 
         self.relative_quat = np.zeros(4)
         mujoco.mju_mulQuat(
