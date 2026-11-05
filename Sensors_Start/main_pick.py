@@ -13,6 +13,8 @@ from control import JointLQRController, solve_position_ik, read_arm_positions
 from grasp import KinematicGrasp
 
 
+from camera_noise import NoisyRGBDPerception #To add noise to camera
+
 # Maximum commanded joint speed in radians per second.
 # 0.3 rad/s is approximately 17 degrees per second.
 MAX_JOINT_SPEED = 0.3
@@ -174,7 +176,7 @@ def main():
 
     q_home = read_arm_positions(model, data)
 
-    perception = RGBDPerception(model)
+    perception = NoisyRGBDPerception(model) if CAMERA_NOISE else RGBDPerception(model)
 
     target_filter = TargetKalmanFilter(
         TARGET_PROCESS_NOISE,
@@ -212,6 +214,7 @@ def main():
             print("[1/6] Scanning for the red target...")
 
             scan_poses = [
+                np.array([-1.9708, -1.2708, 1.2708, -1.5708, -1.5708, 0.0]),
                 q_home.copy(),
                 q_home + np.array([0.25, 0, 0, 0, 0, 0]),
                 q_home + np.array([-0.25, 0, 0, 0, 0, 0]),
