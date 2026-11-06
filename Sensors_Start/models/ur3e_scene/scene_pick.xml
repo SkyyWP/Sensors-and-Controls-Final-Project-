@@ -1,0 +1,26 @@
+<mujoco model="pick_scene">
+  <include file="ur3e.xml"/>
+
+  <worldbody>
+    <geom name="floor"
+          type="plane"
+          size="2 2 0.1"
+          pos="0 0 -0.02"
+          rgba="0.9 0.9 0.9 1"/>
+
+    <geom name="table"
+          type="box"
+          size="0.30 0.25 0.01"
+          pos="0 -0.40 -0.01"
+          rgba="0.55 0.40 0.25 1"/>
+
+    <body name="target" pos="0 -0.35 0.031">
+      <freejoint name="target_free"/>
+      <geom name="target_geom"
+            type="box"
+            size="0.02 0.02 0.03"
+            mass="0.05"
+            rgba="0.9 0.1 0.1 1"/>
+    </body>
+  </worldbody>
+</mujoco>
