@@ -1,7 +1,7 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-MODEL_PATH = ROOT / "models" / "ur3e_camera" / "scene_pick.xml"
+MODEL_PATH = ROOT / "models" / "ur3e_scene" / "scene_pick.xml"
 
 CAMERA_NAME = "wrist_rgbd"
 TARGET_BODY = "target"
